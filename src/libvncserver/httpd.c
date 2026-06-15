@@ -99,6 +99,15 @@ rfbHttpInitSockets(rfbScreenInfoPtr rfbScreen)
 
     rfbScreen->httpInitDone = TRUE;
 
+    /* Always initialize mutexes regardless of httpDir being set */
+    INIT_MUTEX(cl.outputMutex);
+    INIT_MUTEX(cl.refCountMutex);
+    INIT_MUTEX(cl.sendMutex);
+    cl.readFromSocket = rfbDefaultReadFromSocket;
+    cl.peekAtSocket = rfbDefaultPeekAtSocket;
+    cl.hasPendingOnSocket = rfbDefaultHasPendingOnSocket;
+    cl.writeToSocket = rfbDefaultWriteToSocket;
+
     if (!rfbScreen->httpDir)
 	return;
 
@@ -127,13 +136,6 @@ rfbHttpInitSockets(rfbScreenInfoPtr rfbScreen)
     rfbLog("Listening for HTTP connections on TCP6 port %d\n", rfbScreen->http6Port);
     rfbLog("  URL http://%s:%d\n",rfbScreen->thisHost,rfbScreen->http6Port);
 #endif
-    INIT_MUTEX(cl.outputMutex);
-    INIT_MUTEX(cl.refCountMutex);
-    INIT_MUTEX(cl.sendMutex);
-    cl.readFromSocket = rfbDefaultReadFromSocket;
-    cl.peekAtSocket = rfbDefaultPeekAtSocket;
-    cl.hasPendingOnSocket = rfbDefaultHasPendingOnSocket;
-    cl.writeToSocket = rfbDefaultWriteToSocket;
 }
 
 void rfbHttpShutdownSockets(rfbScreenInfoPtr rfbScreen) {
@@ -167,6 +169,7 @@ void rfbHttpShutdownSockets(rfbScreenInfoPtr rfbScreen) {
     TINI_MUTEX(cl.refCountMutex);
 
     memset(&cl, 0, sizeof(rfbClientRec));
+    rfbScreen->httpInitDone = FALSE;
 }
 
 /*
