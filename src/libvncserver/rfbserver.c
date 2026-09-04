@@ -3005,7 +3005,19 @@ rfbProcessClientNormalMessage(rfbClientPtr cl)
 	    rfbLog("                    its sendrate was %d, was decreased %d\n",
 		   ((partialUpdRegion*)ghpringbuf_at(buf, i))->sendrate, ((partialUpdRegion*)ghpringbuf_at(buf, i))->sendrate_decreased);
 #endif
-	    /* mark the lost partial updates as requested */
+	    /* schedule a (re)transmission of this partial in any case */
+	    ((partialUpdRegion*)ghpringbuf_at(buf, i))->repairPending = TRUE;
+
+	    /* re-NACKs are repair-only: a partial that has already been NACKed must
+	       NOT drive the rate controller again, otherwise the client's bounded
+	       re-NACK retries would spuriously throttle the send rate on lossy-but-
+	       uncongested links (e.g. WiFi, where loss is the medium, not congestion).
+	       Only a partial's FIRST NACK participates in rate accounting below. */
+	    if(((partialUpdRegion*)ghpringbuf_at(buf, i))->nackedEver)
+	      continue;
+	    ((partialUpdRegion*)ghpringbuf_at(buf, i))->nackedEver = TRUE;
+
+	    /* register this fresh, not-yet-repaired loss for rate accounting */
 	    ((partialUpdRegion*)ghpringbuf_at(buf, i))->pending = TRUE;
 
 
@@ -4413,7 +4425,7 @@ rfbSendMulticastRepairUpdate(rfbClientPtr cl)
 
     for(i = 0; i < count; ++i) {
       partialUpdRegion* pur = (partialUpdRegion*)ghpringbuf_at(buf, i);
-      if(pur->pending) {
+      if(pur->repairPending) {
 	sraRectangleIterator* i=NULL;
 	sraRect rect;
 
@@ -4440,6 +4452,9 @@ rfbSendMulticastRepairUpdate(rfbClientPtr cl)
 	  rfbLog("MulticastVNC DEBUG: sent repair partial upd to pf,enc group %u: wholeId %d, partialId %d\n", cl->multicastPixelformatEncId, pur->idWhole, pur->idPartial);
 #endif
 	LOCK(cl->screen->multicastSharedMutex);
+	pur->repairPending = FALSE;
+	/* the fresh-loss rate-accounting window for this partial closes once its
+	   repair has been sent (a later re-NACK is repair-only, see above) */
 	pur->pending = FALSE;
 	UNLOCK(cl->screen->multicastSharedMutex);
       }
@@ -4471,7 +4486,9 @@ rfbPutMulticastHeader(rfbClientPtr cl, uint16_t idWholeUpd, uint32_t idPartialUp
     tmp.idWhole = idWholeUpd;
     tmp.idPartial = idPartialUpd;
     tmp.region = sraRgnCreate();
-    tmp.pending = FALSE; 
+    tmp.pending = FALSE;
+    tmp.repairPending = FALSE;
+    tmp.nackedEver = FALSE;
     tmp.sendrate = cl->screen->multicastMaxSendRate;
     tmp.sendrate_decreased = FALSE;
     ghpringbuf_put(buf, &tmp);
