@@ -422,7 +422,7 @@ typedef struct _rfbScreenInfo
     int multicastDeferUpdateTime;
     /* multicast flow control stuff */
 #define MULTICAST_MAXSENDRATE_RATE_START 131072            /**< Initial maximum multicast send rate */
-#define MULTICAST_MAXSENDRATE_INCREMENT_START 32096        /**< Initial multicast send rate increment value*/
+#define MULTICAST_MAXSENDRATE_INCREMENT_START 8192         /**< Initial multicast send rate increment value: a gentle additive step (~1/16 of RATE_START) so the startup ramp doesn't overshoot the channel before the rate controller gets a loss signal */
 #define MULTICAST_MAXSENDRATE_CHANGE_FACTOR 1.2            /**< Factor by which max send rate is decreased and increment value changed */
 #define MULTICAST_MAXSENDRATE_INCREMENT_UP_AFTER 10        /**< After this many consecutive increments the increment itself is increased */
 #define MULTICAST_MAXSENDRATE_INCREMENT_INTERVAL 50        /**< This regulates how long to wait between send rate increments */
